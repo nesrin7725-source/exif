@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toplu Fotoğraf Metadatası Düzenleme Paneli</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter", "ui-sans-serif", "system-ui", "Segoe UI", "Arial"]
+          },
+          boxShadow: {
+            glow: "0 0 40px rgba(99, 102, 241, 0.18)"
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      opacity: 0.75;
+      cursor: pointer;
+    }
+
+    .glass {
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      backdrop-filter: blur(20px);
+    }
+
+    .grid-bg {
+      background-image:
+        radial-gradient(circle at top left, rgba(99, 102, 241, 0.2), transparent 32rem),
+        radial-gradient(circle at top right, rgba(14, 165, 233, 0.14), transparent 28rem),
+        linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px);
+      background-size: auto, auto, 38px 38px, 38px 38px;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: white;
+      border-radius: 999px;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans grid-bg">
+  <main class="max-w-7xl mx-auto px-4 py-8 md:px-6 md:py-10">
+    <header class="mb-8">
+      <div class="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-4 py-2 text-sm text-indigo-200 mb-4">
+        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Client-side · Serverless · No Canvas · Pure EXIF Injection
+      </div>
+
+      <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 class="text-3xl md:text-5xl font-black tracking-tight">
+            Toplu Fotoğraf Metadatası
+            <span class="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-sky-300 to-emerald-300">
+              Düzenleme ve Kronolojik Arşivleme Paneli
+            </span>
+          </h1>
+
+          <p class="mt-4 max-w-3xl text-slate-400 text-base md:text-lg">
+            Fotoğraflar Canvas’a çizilmez ve yeniden JPEG olarak kodlanmaz. İşlem doğrudan orijinal
+            JPEG base64 verisi üzerinde yapılır; piksel verisine dokunulmaz.
+          </p>
+        </div>
+
+        <div class="glass rounded-2xl px-5 py-4 shadow-glow">
+          <p class="text-xs uppercase tracking-widest text-slate-500">Durum</p>
+          <p id="summaryText" class="text-lg font-bold mt-1">Henüz dosya yüklenmedi</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="grid grid-cols-1 xl:grid-cols-12 gap-5">
+      <aside class="xl:col-span-4 space-y-5">
+        <section class="glass rounded-3xl p-5 shadow-glow">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="text-xl font-extrabold">Camera Config</h2>
+              <p class="text-sm text-slate-400 mt-1">Ekipman profilini LocalStorage’a kaydet.</p>
+            </div>
+            <div class="h-11 w-11 rounded-2xl bg-indigo-500/15 flex items-center justify-center text-indigo-200">
+              📷
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <label class="block">
+              <span class="text-sm font-semibold text-slate-300">Camera Make / Üretici</span>
+              <input id="cameraMake" type="text" placeholder="Örn: Canon"
+                class="mt-2 w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/10" />
+            </label>
+
+            <label class="block">
+              <span class="text-sm font-semibold text-slate-300">Camera Model / Kamera Modeli</span>
+              <input id="cameraModel" type="text" placeholder="Örn: EOS R6 Mark II"
+                class="mt-2 w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/10" />
+            </label>
+
+            <label class="block">
+              <span class="text-sm font-semibold text-slate-300">Lens Model / Lens Modeli</span>
+              <input id="lensModel" type="text" placeholder="Örn: RF 24-70mm F2.8L IS USM"
+                class="mt-2 w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/10" />
+            </label>
+
+            <label class="block">
+              <span class="text-sm font-semibold text-slate-300">Artist / Copyright</span>
+              <input id="artistCopyright" type="text" placeholder="Örn: John Studio © 2026"
+                class="mt-2 w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-400/10" />
+            </label>
+
+            <button id="saveProfileBtn"
+              class="w-full rounded-2xl bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 transition px-5 py-3 font-bold text-white shadow-lg shadow-indigo-500/20">
+              Profili Kaydet
+            </button>
+          </div>
+        </section>
+
+        <section class="glass rounded-3xl p-5 shadow-glow">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="text-xl font-extrabold">Chronological Sequencer</h2>
+              <p class="text-sm text-slate-400 mt-1">Tarih ve dosya adını sıralı üret.</p>
+            </div>
+            <div class="h-11 w-11 rounded-2xl bg-sky-500/15 flex items-center justify-center text-sky-200">
+              ⏱️
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <label class="block">
+              <span class="text-sm font-semibold text-slate-300">Çekim Başlangıç Tarihi ve Saati</span>
+              <input id="baseDateTime" type="datetime-local"
+                class="mt-2 w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10" />
+            </label>
+
+            <label class="block">
+              <span class="text-sm font-semibold text-slate-300">Dakika Artış Miktarı</span>
+              <input id="incrementMinutes" type="number" min="0" step="1" value="1"
+                class="mt-2 w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-400/10" />
+            </label>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label class="block">
+                <span class="text-sm font-semibold text-slate-300">Başlangıç Numarası</span>
+                <input id="startingIndex" type="number" min="1" step="1" value="1"
+                  class="mt-2 w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10" />
+                <span class="mt-2 block text-xs text-slate-500">
+                  Örn: 150 → 0150, 0151, 0152
+                </span>
+              </label>
+
+              <label class="block">
+                <span class="text-sm font-semibold text-slate-300">Dosya Adı Öneki</span>
+                <div class="mt-2 flex gap-2">
+                  <input id="filenamePrefix" type="text" value="DSC_" placeholder="Örn: DSC_, IMG_, Yuzuk_"
+                    class="w-full rounded-2xl bg-slate-900/90 border border-slate-700/80 px-4 py-3 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10" />
+
+                  <label class="shrink-0 inline-flex items-center gap-2 rounded-2xl border border-slate-700/80 bg-slate-900/90 px-3 py-3 cursor-pointer select-none">
+                    <input id="addDatePrefix" type="checkbox" class="h-4 w-4 accent-emerald-400" />
+                    <span class="text-sm font-bold text-slate-300 whitespace-nowrap">Tarih Ekle</span>
+                  </label>
+                </div>
+                <span class="mt-2 block text-xs text-slate-500">
+                  Açıkken: 2026_07_06_DSC_0001.jpg
+                </span>
+              </label>
+            </div>
+
+            <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-slate-300">
+              <strong class="text-emerald-300">Kalite Koruma Modu:</strong>
+              Canvas, drawImage, toBlob veya toDataURL ile yeniden JPEG üretimi yapılmaz.
+              Sadece EXIF segmentleri değiştirilir.
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="xl:col-span-8 space-y-5">
+        <section class="glass rounded-3xl p-5 md:p-6 shadow-glow">
+          <div id="dropZone"
+            class="relative rounded-3xl border-2 border-dashed border-slate-600/80 bg-slate-900/50 hover:bg-slate-900/80 hover:border-indigo-300/80 transition cursor-pointer px-6 py-12 text-center overflow-hidden">
+            <div class="absolute inset-0 pointer-events-none opacity-30 bg-gradient-to-br from-indigo-500/10 via-transparent to-sky-500/10"></div>
+
+            <input id="fileInput" type="file" accept="image/jpeg,.jpg,.jpeg" multiple class="hidden" />
+
+            <div class="relative z-10 max-w-xl mx-auto">
+              <div class="mx-auto h-16 w-16 rounded-3xl bg-indigo-500/15 flex items-center justify-center text-3xl mb-5">
+                ⬆️
+              </div>
+              <h2 class="text-2xl font-black">JPG/JPEG fotoğrafları buraya sürükle-bırak</h2>
+              <p class="mt-2 text-slate-400">
+                veya dosya seçmek için bu alana tıkla. Birden fazla fotoğrafı toplu olarak kabul eder.
+              </p>
+              <p class="mt-4 text-xs text-slate-500">
+                Fotoğraflar sunucuya gönderilmez. İşlem tamamen tarayıcı içinde yapılır.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-5 flex flex-col sm:flex-row gap-3">
+            <button id="processBtn"
+              class="flex-1 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed active:bg-emerald-600 transition px-5 py-3 font-black text-slate-950 shadow-lg shadow-emerald-500/20">
+              Fotoğrafları Güncelle
+            </button>
+
+            <button id="clearBtn"
+              class="rounded-2xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition px-5 py-3 font-bold text-slate-200 border border-slate-700">
+              Listeyi Temizle
+            </button>
+          </div>
+
+          <div class="mt-5">
+            <div class="flex items-center justify-between text-sm mb-2">
+              <span class="font-semibold text-slate-300">İşlem İlerlemesi</span>
+              <span id="progressText" class="text-slate-500">0%</span>
+            </div>
+            <div class="h-3 rounded-full bg-slate-800 overflow-hidden">
+              <div id="progressBar" class="h-full w-0 bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 transition-all duration-300"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass rounded-3xl p-5 md:p-6 shadow-glow">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+            <div>
+              <h2 class="text-xl font-extrabold">Yüklenen Fotoğraflar</h2>
+              <p class="text-sm text-slate-400 mt-1">Liste sırası hem EXIF zamanı hem dosya adı sırasıdır.</p>
+            </div>
+
+            <button id="downloadZipBtn"
+              class="rounded-2xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed active:bg-indigo-600 transition px-5 py-3 font-black text-white shadow-lg shadow-indigo-500/20 inline-flex items-center justify-center gap-2">
+              <span id="zipSpinner" class="spinner hidden"></span>
+              <span id="zipButtonText">Tümünü ZIP Olarak İndir</span>
+            </button>
+          </div>
+
+          <div id="fileList" class="space-y-3">
+            <div class="rounded-3xl border border-slate-800 bg-slate-900/50 px-5 py-10 text-center text-slate-500">
+              Henüz fotoğraf yüklenmedi.
+            </div>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <div id="exifModal" class="fixed inset-0 z-50 hidden">
+    <div id="modalBackdrop" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
+
+    <div class="relative z-10 min-h-screen flex items-center justify-center p-4">
+      <section class="glass w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-700/70 p-5">
+          <div>
+            <p class="text-xs uppercase tracking-widest text-emerald-300">Live EXIF Inspector</p>
+            <h3 class="text-2xl font-black mt-1">EXIF Kontrol Paneli</h3>
+            <p id="modalFileName" class="text-sm text-slate-400 mt-1"></p>
+          </div>
+
+          <button id="closeModalBtn"
+            class="h-10 w-10 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition">
+            ✕
+          </button>
+        </div>
+
+        <div id="modalContent" class="p-5">
+          <div class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4 text-slate-400">
+            EXIF verisi okunuyor...
+          </div>
+        </div>
+
+        <div class="border-t border-slate-700/70 p-5 text-xs text-slate-500">
+          Bu panel, indirilecek işlenmiş JPEG base64 verisinin içinden EXIF verisini canlı olarak okur.
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast"
+    class="fixed bottom-5 left-1/2 -translate-x-1/2 hidden max-w-lg rounded-2xl border border-slate-700 bg-slate-900/95 px-5 py-3 text-sm text-slate-100 shadow-2xl z-[60]">
+  </div>
+
+  <script>
+    "use strict";
+
+    const PROFILE_KEY = "chronoPhotoMetadataProfile.v4.noCanvas";
+    const ZIP_FILE_NAME = "Etsy_Hazir_Fotograflar.zip";
+
+    const state = {
+      items: [],
+      isProcessing: false,
+      isZipping: false
+    };
+
+    const els = {
+      cameraMake: document.getElementById("cameraMake"),
+      cameraModel: document.getElementById("cameraModel"),
+      lensModel: document.getElementById("lensModel"),
+      artistCopyright: document.getElementById("artistCopyright"),
+      filenamePrefix: document.getElementById("filenamePrefix"),
+      startingIndex: document.getElementById("startingIndex"),
+      addDatePrefix: document.getElementById("addDatePrefix"),
+      saveProfileBtn: document.getElementById("saveProfileBtn"),
+      baseDateTime: document.getElementById("baseDateTime"),
+      incrementMinutes: document.getElementById("incrementMinutes"),
+      dropZone: document.getElementById("dropZone"),
+      fileInput: document.getElementById("fileInput"),
+      processBtn: document.getElementById("processBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      downloadZipBtn: document.getElementById("downloadZipBtn"),
+      zipSpinner: document.getElementById("zipSpinner"),
+      zipButtonText: document.getElementById("zipButtonText"),
+      fileList: document.getElementById("fileList"),
+      summaryText: document.getElementById("summaryText"),
+      progressText: document.getElementById("progressText"),
+      progressBar: document.getElementById("progressBar"),
+      toast: document.getElementById("toast"),
+      exifModal: document.getElementById("exifModal"),
+      modalBackdrop: document.getElementById("modalBackdrop"),
+      closeModalBtn: document.getElementById("closeModalBtn"),
+      modalContent: document.getElementById("modalContent"),
+      modalFileName: document.getElementById("modalFileName")
+    };
+
+    document.addEventListener("DOMContentLoaded", init);
+
+    function init() {
+      loadProfile();
+      setDefaultDateTime();
+      bindEvents();
+      render();
+    }
+
+    function bindEvents() {
+      els.saveProfileBtn.addEventListener("click", saveProfile);
+
+      els.dropZone.addEventListener("click", () => {
+        if (!isBusy()) els.fileInput.click();
+      });
+
+      els.fileInput.addEventListener("change", event => {
+        addFiles(event.target.files);
+        els.fileInput.value = "";
+      });
+
+      ["dragenter", "dragover"].forEach(eventName => {
+        els.dropZone.addEventListener(eventName, event => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (isBusy()) return;
+
+          els.dropZone.classList.add("border-indigo-300", "bg-indigo-500/10");
+        });
+      });
+
+      ["dragleave", "drop"].forEach(eventName => {
+        els.dropZone.addEventListener(eventName, event => {
+          event.preventDefault();
+          event.stopPropagation();
+          els.dropZone.classList.remove("border-indigo-300", "bg-indigo-500/10");
+        });
+      });
+
+      els.dropZone.addEventListener("drop", event => {
+        if (isBusy()) return;
+        addFiles(event.dataTransfer.files);
+      });
+
+      els.processBtn.addEventListener("click", processAllPhotos);
+      els.downloadZipBtn.addEventListener("click", downloadAllAsZip);
+      els.clearBtn.addEventListener("click", clearAll);
+
+      els.baseDateTime.addEventListener("change", render);
+      els.incrementMinutes.addEventListener("input", render);
+      els.filenamePrefix.addEventListener("input", render);
+      els.startingIndex.addEventListener("input", render);
+      els.addDatePrefix.addEventListener("change", render);
+
+      els.closeModalBtn.addEventListener("click", closeExifModal);
+      els.modalBackdrop.addEventListener("click", closeExifModal);
+
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape") closeExifModal();
+      });
+    }
+
+    function isBusy() {
+      return state.isProcessing || state.isZipping;
+    }
+
+    function loadProfile() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
+
+        els.cameraMake.value = saved.cameraMake || "";
+        els.cameraModel.value = saved.cameraModel || "";
+        els.lensModel.value = saved.lensModel || "";
+        els.artistCopyright.value = saved.artistCopyright || "";
+        els.filenamePrefix.value = saved.filenamePrefix || "DSC_";
+        els.startingIndex.value = saved.startingIndex || 1;
+        els.addDatePrefix.checked = Boolean(saved.addDatePrefix);
+      } catch {
+        localStorage.removeItem(PROFILE_KEY);
+        els.filenamePrefix.value = "DSC_";
+        els.startingIndex.value = 1;
+        els.addDatePrefix.checked = false;
+      }
+    }
+
+    function saveProfile() {
+      const profile = getProfile();
+
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      showToast("Ekipman profili, dosya öneki ve numaralandırma ayarları kaydedildi.");
+    }
+
+    function getProfile() {
+      return {
+        cameraMake: els.cameraMake.value.trim(),
+        cameraModel: els.cameraModel.value.trim(),
+        lensModel: els.lensModel.value.trim(),
+        artistCopyright: els.artistCopyright.value.trim(),
+        filenamePrefix: getSafeFilenamePrefix(),
+        startingIndex: getStartingIndex(),
+        addDatePrefix: els.addDatePrefix.checked
+      };
+    }
+
+    function getSafeFilenamePrefix() {
+      const raw = els.filenamePrefix.value || "DSC_";
+
+      let safe = raw
+        .replace(/[\\/:*?"<>|]+/g, "_")
+        .replace(/\s+/g, "_")
+        .replace(/[^\w\-]+/g, "_")
+        .replace(/_+/g, "_");
+
+      if (!safe) safe = "DSC_";
+
+      if (!safe.endsWith("_") && !safe.endsWith("-")) {
+        safe += "_";
+      }
+
+      return safe;
+    }
+
+    function getStartingIndex() {
+      const parsed = parseInt(els.startingIndex.value, 10);
+
+      if (!Number.isFinite(parsed) || parsed < 1) {
+        return 1;
+      }
+
+      return parsed;
+    }
+
+    function setDefaultDateTime() {
+      const now = new Date();
+      now.setSeconds(0, 0);
+      els.baseDateTime.value = toDateTimeLocalInputValue(now);
+    }
+
+    function addFiles(fileList) {
+      const files = Array.from(fileList || []);
+
+      const jpegFiles = files.filter(file => {
+        const byMime = file.type === "image/jpeg";
+        const byName = /\.(jpe?g)$/i.test(file.name);
+        return byMime || byName;
+      });
+
+      if (!jpegFiles.length) {
+        showToast("Lütfen yalnızca JPG/JPEG dosyaları yükleyin.");
+        return;
+      }
+
+      const existingKeys = new Set(
+        state.items.map(item => `${item.file.name}-${item.file.size}-${item.file.lastModified}`)
+      );
+
+      const newItems = jpegFiles
+        .filter(file => {
+          const key = `${file.name}-${file.size}-${file.lastModified}`;
+
+          if (existingKeys.has(key)) return false;
+
+          existingKeys.add(key);
+          return true;
+        })
+        .map(file => ({
+          id: createId(),
+          file,
+          previewUrl: URL.createObjectURL(file),
+          status: "pending",
+          statusMessage: "Bekliyor",
+          originalSize: file.size,
+          processedSize: null,
+          processedDataUrl: null,
+          processedBase64: null,
+          outputName: null,
+          scheduledDate: null,
+          error: null
+        }));
+
+      state.items.push(...newItems);
+
+      if (newItems.length !== jpegFiles.length) {
+        showToast("Aynı dosyalardan bazıları tekrar eklenmedi.");
+      }
+
+      render();
+    }
+
+    function createId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+
+      return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    function clearAll() {
+      if (isBusy()) return;
+
+      state.items.forEach(item => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+
+      state.items = [];
+      updateProgress(0);
+      render();
+    }
+
+    async function processAllPhotos() {
+      if (isBusy()) return;
+
+      if (!state.items.length) {
+        showToast("Önce JPG/JPEG fotoğraf yükleyin.");
+        return;
+      }
+
+      const baseDate = getBaseDate();
+
+      if (!baseDate) {
+        showToast("Lütfen geçerli bir başlangıç tarihi ve saati seçin.");
+        return;
+      }
+
+      const increment = getIncrementMinutes();
+
+      if (!Number.isFinite(increment) || increment < 0) {
+        showToast("Dakika artış miktarı 0 veya daha büyük olmalıdır.");
+        return;
+      }
+
+      const startingIndex = getStartingIndex();
+
+      if (!Number.isFinite(startingIndex) || startingIndex < 1) {
+        showToast("Başlangıç numarası 1 veya daha büyük olmalıdır.");
+        return;
+      }
+
+      state.isProcessing = true;
+      setControlsDisabled(true);
+      updateProgress(0);
+
+      const profile = getProfile();
+
+      for (let index = 0; index < state.items.length; index++) {
+        const item = state.items[index];
+
+        item.status = "processing";
+        item.statusMessage = "İşleniyor";
+        item.error = null;
+        item.processedDataUrl = null;
+        item.processedBase64 = null;
+        item.processedSize = null;
+        item.outputName = makeChronologicalOutputFileName(profile, index);
+        item.scheduledDate = getScheduledDate(index);
+
+        render();
+
+        try {
+          const processed = await processSinglePhoto(item.file, profile, item.scheduledDate, index);
+
+          item.processedDataUrl = processed.dataUrl;
+          item.processedBase64 = processed.base64;
+          item.processedSize = processed.estimatedBytes;
+          item.outputName = processed.outputName;
+          item.status = "done";
+          item.statusMessage = "Başarıyla Güncellendi";
+        } catch (error) {
+          console.error(error);
+
+          item.status = "error";
+          item.statusMessage = "Hata";
+          item.error = error && error.message ? error.message : "Bilinmeyen işlem hatası";
+        }
+
+        updateProgress(Math.round(((index + 1) / state.items.length) * 100));
+        render();
+        await waitForUI();
+      }
+
+      state.isProcessing = false;
+      setControlsDisabled(false);
+
+      const successCount = state.items.filter(item => item.status === "done").length;
+      const errorCount = state.items.filter(item => item.status === "error").length;
+
+      if (successCount && !errorCount) {
+        showToast(`${successCount} fotoğraf başarıyla güncellendi. Pikseller yeniden kodlanmadı.`);
+      } else if (successCount && errorCount) {
+        showToast(`${successCount} fotoğraf güncellendi, ${errorCount} fotoğrafta hata oluştu.`);
+      } else {
+        showToast("Hiçbir fotoğraf güncellenemedi.");
+      }
+
+      render();
+    }
+
+    async function processSinglePhoto(file, profile, scheduledDate, index) {
+      if (!scheduledDate || Number.isNaN(scheduledDate.getTime())) {
+        throw new Error("Geçersiz tarih/saat değeri.");
+      }
+
+      /*
+        NO CANVAS PIPELINE:
+        - canvas yok
+        - ctx.drawImage yok
+        - toBlob yok
+        - toDataURL yok
+        - JPEG yeniden sıkıştırma yok
+
+        Dosya doğrudan FileReader.readAsDataURL ile saf JPEG base64 olarak okunur.
+        piexif.remove ve piexif.insert JPEG'in metadata segmentlerini değiştirir.
+        Piksel stream'i yeniden encode edilmez.
+      */
+      const originalDataUrl = await readFileAsDataURL(file);
+
+      validateJpegDataUrl(originalDataUrl);
+
+      let clearedDataUrl;
+
+      try {
+        clearedDataUrl = piexif.remove(originalDataUrl);
+      } catch (removeError) {
+        /*
+          Bazı JPEG'lerde EXIF segmenti olmayabilir. Bu durumda piksel verisine dokunmadan
+          orijinal data URL üzerinde EXIF insert işlemine devam edilir.
+        */
+        clearedDataUrl = originalDataUrl;
+      }
+
+      const exifObject = buildExifObject(profile, scheduledDate);
+      const exifBytes = piexif.dump(exifObject);
+      const updatedDataUrl = piexif.insert(exifBytes, clearedDataUrl);
+      const updatedBase64 = extractBase64FromDataUrl(updatedDataUrl);
+
+      return {
+        dataUrl: updatedDataUrl,
+        base64: updatedBase64,
+        estimatedBytes: estimateBase64ByteSize(updatedBase64),
+        outputName: makeChronologicalOutputFileName(profile, index)
+      };
+    }
+
+    function readFileAsDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          if (typeof reader.result !== "string") {
+            reject(new Error("Dosya base64 olarak okunamadı."));
+            return;
+          }
+
+          resolve(reader.result);
+        };
+
+        reader.onerror = () => {
+          reject(new Error("Dosya okunurken hata oluştu."));
+        };
+
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function validateJpegDataUrl(dataUrl) {
+      if (typeof dataUrl !== "string" || !/^data:image\/jpe?g;base64,/i.test(dataUrl)) {
+        throw new Error("Dosya geçerli bir JPEG data URL değil.");
+      }
+    }
+
+    function buildExifObject(profile, date) {
+      const dateString = formatExifDateTime(date);
+
+      const zeroth = {};
+      const exif = {};
+
+      if (profile.cameraMake) {
+        zeroth[piexif.ImageIFD.Make] = profile.cameraMake;
+      }
+
+      if (profile.cameraModel) {
+        zeroth[piexif.ImageIFD.Model] = profile.cameraModel;
+      }
+
+      if (profile.artistCopyright) {
+        zeroth[piexif.ImageIFD.Artist] = profile.artistCopyright;
+        zeroth[piexif.ImageIFD.Copyright] = profile.artistCopyright;
+      }
+
+      zeroth[piexif.ImageIFD.DateTime] = dateString;
+
+      exif[piexif.ExifIFD.DateTimeOriginal] = dateString;
+      exif[piexif.ExifIFD.DateTimeDigitized] = dateString;
+
+      if (profile.lensModel) {
+        exif[piexif.ExifIFD.LensModel] = profile.lensModel;
+      }
+
+      return {
+        "0th": zeroth,
+        "Exif": exif,
+        "GPS": {},
+        "Interop": {},
+        "1st": {},
+        "thumbnail": null
+      };
+    }
+
+    async function downloadAllAsZip() {
+      if (isBusy()) return;
+
+      const processedItems = state.items.filter(item => {
+        return item.status === "done" && item.processedBase64 && item.outputName;
+      });
+
+      if (!processedItems.length) {
+        showToast("ZIP indirmek için önce fotoğrafları başarıyla güncelleyin.");
+        return;
+      }
+
+      state.isZipping = true;
+      setControlsDisabled(true);
+      setZipLoading(true);
+      updateProgress(0);
+
+      try {
+        const zip = new JSZip();
+
+        /*
+          ZIP'E SAF BASE64 AKTARIM:
+          - data:image/jpeg;base64, prefix'i yok.
+          - Blob veya Canvas yok.
+          - JSZip'e { base64: true } ile eklenir.
+        */
+        await Promise.all(
+          processedItems.map(async item => {
+            zip.file(item.outputName, item.processedBase64, {
+              base64: true,
+              binary: true
+            });
+          })
+        );
+
+        const zipBlob = await zip.generateAsync(
+          {
+            type: "blob",
+            compression: "STORE"
+          },
+          metadata => {
+            updateProgress(Math.round(metadata.percent));
+          }
+        );
+
+        triggerZipDownload(zipBlob, ZIP_FILE_NAME);
+        showToast("ZIP dosyası hazırlandı ve indirme başlatıldı.");
+      } catch (error) {
+        console.error(error);
+        showToast("ZIP oluşturulurken hata oluştu.");
+      } finally {
+        state.isZipping = false;
+        setZipLoading(false);
+        setControlsDisabled(false);
+        updateProgress(100);
+        render();
+      }
+    }
+
+    function triggerZipDownload(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = fileName;
+      link.style.display = "none";
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    }
+
+    function setZipLoading(isLoading) {
+      if (isLoading) {
+        els.zipSpinner.classList.remove("hidden");
+        els.zipButtonText.textContent = "ZIP Hazırlanıyor...";
+      } else {
+        els.zipSpinner.classList.add("hidden");
+        els.zipButtonText.textContent = "Tümünü ZIP Olarak İndir";
+      }
+    }
+
+    async function openExifInspector(itemId) {
+      const item = state.items.find(fileItem => fileItem.id === itemId);
+
+      if (!item || item.status !== "done" || !item.processedDataUrl) {
+        showToast("Bu fotoğraf için okunabilir işlenmiş EXIF verisi yok.");
+        return;
+      }
+
+      els.modalFileName.textContent = item.outputName || item.file.name;
+      els.modalContent.innerHTML = `
+        <div class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4 text-slate-400">
+          EXIF verisi okunuyor...
+        </div>
+      `;
+
+      els.exifModal.classList.remove("hidden");
+
+      try {
+        const exifData = piexif.load(item.processedDataUrl);
+
+        const zeroth = exifData["0th"] || {};
+        const exif = exifData["Exif"] || {};
+
+        const make = readExifValue(zeroth, piexif.ImageIFD.Make);
+        const model = readExifValue(zeroth, piexif.ImageIFD.Model);
+        const lens = readExifValue(exif, piexif.ExifIFD.LensModel);
+        const artist = readExifValue(zeroth, piexif.ImageIFD.Artist);
+        const copyright = readExifValue(zeroth, piexif.ImageIFD.Copyright);
+        const dateTime = readExifValue(zeroth, piexif.ImageIFD.DateTime);
+        const dateTimeOriginal = readExifValue(exif, piexif.ExifIFD.DateTimeOriginal);
+        const dateTimeDigitized = readExifValue(exif, piexif.ExifIFD.DateTimeDigitized);
+
+        const expectedDate = item.scheduledDate ? formatExifDateTime(item.scheduledDate) : "";
+        const isDateValid = dateTimeOriginal === expectedDate || dateTime === expectedDate;
+
+        els.modalContent.innerHTML = `
+          <div class="space-y-4">
+            <div class="rounded-2xl border ${isDateValid ? "border-emerald-400/30 bg-emerald-400/10" : "border-amber-400/30 bg-amber-400/10"} p-4">
+              <p class="text-sm font-black ${isDateValid ? "text-emerald-300" : "text-amber-300"}">
+                ${isDateValid ? "EXIF tarihi beklenen değerle eşleşiyor." : "EXIF tarihi kontrol edilmeli."}
+              </p>
+              <p class="text-xs text-slate-400 mt-1">
+                Beklenen zaman: ${escapeHtml(expectedDate || "Belirlenemedi")}
+              </p>
+            </div>
+
+            ${renderExifRow("Dosya Adı", item.outputName || "-")}
+            ${renderExifRow("Camera Make", make)}
+            ${renderExifRow("Camera Model", model)}
+            ${renderExifRow("Lens Model", lens)}
+            ${renderExifRow("Artist", artist)}
+            ${renderExifRow("Copyright", copyright)}
+            ${renderExifRow("Image DateTime", dateTime)}
+            ${renderExifRow("DateTimeOriginal", dateTimeOriginal)}
+            ${renderExifRow("DateTimeDigitized", dateTimeDigitized)}
+            ${renderExifRow("Orijinal Boyut", formatBytes(item.originalSize))}
+            ${renderExifRow("İşlenmiş Tahmini Boyut", formatBytes(item.processedSize || 0))}
+            ${renderExifRow("İşleme Modu", "No Canvas / Pure EXIF Injection")}
+          </div>
+        `;
+      } catch (error) {
+        console.error(error);
+
+        els.modalContent.innerHTML = `
+          <div class="rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4">
+            <p class="text-sm font-black text-rose-300">EXIF verisi okunamadı.</p>
+            <p class="text-xs text-slate-400 mt-2">${escapeHtml(error.message || "Bilinmeyen hata")}</p>
+          </div>
+        `;
+      }
+    }
+
+    function renderExifRow(label, value) {
+      return `
+        <div class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <p class="text-xs uppercase tracking-widest text-slate-500">${escapeHtml(label)}</p>
+          <p class="mt-1 text-base font-bold text-slate-100 break-words">${escapeHtml(value || "-")}</p>
+        </div>
+      `;
+    }
+
+    function readExifValue(group, tag) {
+      const value = group[tag];
+
+      if (value === undefined || value === null || value === "") {
+        return "-";
+      }
+
+      if (Array.isArray(value)) {
+        return value.join(", ");
+      }
+
+      return String(value);
+    }
+
+    function closeExifModal() {
+      els.exifModal.classList.add("hidden");
+    }
+
+    function render() {
+      syncScheduledDatesAndNames();
+      renderSummary();
+      renderFileList();
+      syncButtonStates();
+    }
+
+    function syncScheduledDatesAndNames() {
+      const profile = getProfile();
+
+      state.items.forEach((item, index) => {
+        item.scheduledDate = getScheduledDate(index);
+
+        if (item.status !== "done") {
+          item.outputName = makeChronologicalOutputFileName(profile, index);
+        }
+      });
+    }
+
+    function renderSummary() {
+      const total = state.items.length;
+      const done = state.items.filter(item => item.status === "done").length;
+      const errors = state.items.filter(item => item.status === "error").length;
+
+      if (!total) {
+        els.summaryText.textContent = "Henüz dosya yüklenmedi";
+        return;
+      }
+
+      els.summaryText.textContent = `${total} dosya · ${done} güncellendi · ${errors} hata`;
+    }
+
+    function renderFileList() {
+      if (!state.items.length) {
+        els.fileList.innerHTML = `
+          <div class="rounded-3xl border border-slate-800 bg-slate-900/50 px-5 py-10 text-center text-slate-500">
+            Henüz fotoğraf yüklenmedi.
+          </div>
+        `;
+        return;
+      }
+
+      els.fileList.innerHTML = state.items.map((item, index) => {
+        const statusClass = getStatusClass(item.status);
+
+        const scheduledText = item.scheduledDate
+          ? formatHumanDateTime(item.scheduledDate)
+          : "Geçersiz tarih";
+
+        const errorHtml = item.error
+          ? `<p class="mt-2 text-xs text-rose-300">${escapeHtml(item.error)}</p>`
+          : "";
+
+        const outputHtml = item.outputName
+          ? `<p class="mt-1 text-xs text-emerald-300">ZIP dosya adı: ${escapeHtml(item.outputName)}</p>`
+          : "";
+
+        const sizeHtml = item.status === "done"
+          ? `
+            <p class="mt-1 text-xs text-slate-500">
+              Orijinal: ${formatBytes(item.originalSize)}
+              · İşlenmiş: ${formatBytes(item.processedSize || 0)}
+              · Canvas yok
+            </p>
+          `
+          : "";
+
+        const inspectButton = item.status === "done"
+          ? `
+            <button
+              class="inspect-exif-btn rounded-xl border border-emerald-400/30 bg-emerald-400/10 hover:bg-emerald-400/20 px-3 py-2 text-xs font-black text-emerald-300 transition"
+              data-id="${item.id}">
+              EXIF Kontrol Et
+            </button>
+          `
+          : "";
+
+        const removeButton = isBusy()
+          ? ""
+          : `
+            <button
+              class="remove-file-btn rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-300 transition"
+              data-id="${item.id}">
+              Kaldır
+            </button>
+          `;
+
+        return `
+          <article class="rounded-3xl border border-slate-800 bg-slate-900/55 p-4">
+            <div class="flex flex-col md:flex-row md:items-center gap-4">
+              <div class="flex items-center gap-4 flex-1 min-w-0">
+                <img
+                  src="${item.previewUrl}"
+                  alt=""
+                  class="h-16 w-16 rounded-2xl object-cover border border-slate-700 bg-slate-800"
+                />
+
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="font-extrabold truncate max-w-[280px] md:max-w-[420px]">
+                      ${escapeHtml(item.file.name)}
+                    </p>
+
+                    <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">
+                      ${escapeHtml(item.statusMessage)}
+                    </span>
+
+                    ${inspectButton}
+                  </div>
+
+                  <p class="mt-1 text-sm text-slate-400">
+                    #${String(index + 1).padStart(4, "0")}
+                    · ${formatBytes(item.file.size)}
+                    · EXIF zamanı: ${escapeHtml(scheduledText)}
+                  </p>
+
+                  ${outputHtml}
+                  ${sizeHtml}
+                  ${errorHtml}
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 md:justify-end">
+                ${removeButton}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      document.querySelectorAll(".remove-file-btn").forEach(button => {
+        button.addEventListener("click", () => removeFile(button.dataset.id));
+      });
+
+      document.querySelectorAll(".inspect-exif-btn").forEach(button => {
+        button.addEventListener("click", () => openExifInspector(button.dataset.id));
+      });
+    }
+
+    function removeFile(id) {
+      if (isBusy()) return;
+
+      const item = state.items.find(fileItem => fileItem.id === id);
+
+      if (item && item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+
+      state.items = state.items.filter(fileItem => fileItem.id !== id);
+      render();
+    }
+
+    function syncButtonStates() {
+      const hasItems = state.items.length > 0;
+      const hasProcessed = state.items.some(item => item.status === "done" && item.processedBase64);
+
+      els.processBtn.disabled = isBusy() || !hasItems;
+      els.clearBtn.disabled = isBusy() || !hasItems;
+      els.downloadZipBtn.disabled = isBusy() || !hasProcessed;
+    }
+
+    function setControlsDisabled(disabled) {
+      els.cameraMake.disabled = disabled;
+      els.cameraModel.disabled = disabled;
+      els.lensModel.disabled = disabled;
+      els.artistCopyright.disabled = disabled;
+      els.filenamePrefix.disabled = disabled;
+      els.startingIndex.disabled = disabled;
+      els.addDatePrefix.disabled = disabled;
+      els.saveProfileBtn.disabled = disabled;
+      els.baseDateTime.disabled = disabled;
+      els.incrementMinutes.disabled = disabled;
+      els.fileInput.disabled = disabled;
+
+      syncButtonStates();
+    }
+
+    function getStatusClass(status) {
+      if (status === "done") {
+        return "bg-emerald-400/15 text-emerald-300 border border-emerald-400/20";
+      }
+
+      if (status === "processing") {
+        return "bg-sky-400/15 text-sky-300 border border-sky-400/20";
+      }
+
+      if (status === "error") {
+        return "bg-rose-400/15 text-rose-300 border border-rose-400/20";
+      }
+
+      return "bg-slate-700/70 text-slate-300 border border-slate-600";
+    }
+
+    function getBaseDate() {
+      if (!els.baseDateTime.value) return null;
+
+      const date = new Date(els.baseDateTime.value);
+
+      if (Number.isNaN(date.getTime())) return null;
+
+      return date;
+    }
+
+    function getIncrementMinutes() {
+      return Number(els.incrementMinutes.value);
+    }
+
+    function getScheduledDate(index) {
+      const baseDate = getBaseDate();
+      const increment = getIncrementMinutes();
+
+      if (!baseDate || !Number.isFinite(increment)) return null;
+
+      return new Date(baseDate.getTime() + index * increment * 60 * 1000);
+    }
+
+    function formatExifDateTime(date) {
+      const yyyy = date.getFullYear();
+      const mm = pad2(date.getMonth() + 1);
+      const dd = pad2(date.getDate());
+      const hh = pad2(date.getHours());
+      const mi = pad2(date.getMinutes());
+      const ss = pad2(date.getSeconds());
+
+      return `${yyyy}:${mm}:${dd} ${hh}:${mi}:${ss}`;
+    }
+
+    function formatHumanDateTime(date) {
+      try {
+        return new Intl.DateTimeFormat("tr-TR", {
+          dateStyle: "medium",
+          timeStyle: "medium"
+        }).format(date);
+      } catch {
+        return date.toLocaleString();
+      }
+    }
+
+    function toDateTimeLocalInputValue(date) {
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+
+    function makeChronologicalOutputFileName(profile, index) {
+      const prefix = profile.filenamePrefix || "DSC_";
+      const start = Number.isFinite(profile.startingIndex) ? profile.startingIndex : 1;
+      const number = String(start + index).padStart(4, "0");
+      const datePart = profile.addDatePrefix ? `${formatDateForFileName(getBaseDate() || new Date())}_` : "";
+
+      return `${datePart}${prefix}${number}.jpg`;
+    }
+
+    function formatDateForFileName(date) {
+      const yyyy = date.getFullYear();
+      const mm = pad2(date.getMonth() + 1);
+      const dd = pad2(date.getDate());
+
+      return `${yyyy}_${mm}_${dd}`;
+    }
+
+    function extractBase64FromDataUrl(dataUrl) {
+      if (typeof dataUrl !== "string") {
+        throw new Error("Geçersiz base64 görsel verisi.");
+      }
+
+      if (dataUrl.includes(",")) {
+        return dataUrl.split(",")[1];
+      }
+
+      return dataUrl.replace(/^data:image\/jpe?g;base64,/i, "");
+    }
+
+    function estimateBase64ByteSize(base64) {
+      if (!base64) return 0;
+
+      const clean = base64.replace(/\s/g, "");
+      const padding = clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0;
+
+      return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
+    }
+
+    function formatBytes(bytes) {
+      if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+
+      const units = ["B", "KB", "MB", "GB"];
+      const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const value = bytes / Math.pow(1024, index);
+
+      return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+    }
+
+    function updateProgress(percent) {
+      const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+
+      els.progressText.textContent = `${safePercent}%`;
+      els.progressBar.style.width = `${safePercent}%`;
+    }
+
+    function showToast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.remove("hidden");
+
+      clearTimeout(showToast.timeout);
+
+      showToast.timeout = setTimeout(() => {
+        els.toast.classList.add("hidden");
+      }, 3200);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function pad2(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function waitForUI() {
+      return new Promise(resolve => requestAnimationFrame(() => resolve()));
+    }
+  </script>
+</body>
+</html>
